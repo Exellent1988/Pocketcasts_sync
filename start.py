@@ -1,8 +1,11 @@
-import pocketcasts
-import requests
+from pycketcasts import PocketCast
 import os
 from dotenv import load_dotenv
 import coloredlogs, logging
+import pprint
+from mygpoclient import api
+pp = pprint.PrettyPrinter(indent=4)
+
 
 # Logger konfigurieren
 logger = logging.getLogger(__name__)
@@ -15,22 +18,13 @@ load_dotenv()
 POCKETCASTS_USERNAME = os.getenv('POCKETCASTS_USERNAME')
 POCKETCASTS_PASSWORD = os.getenv('POCKETCASTS_PASSWORD')
 GPODDER_SERVER = os.getenv('GPODDER_SERVER')
+GPODDER_USER = os.getenv('GPODDER_USER')
+GPODDER_PASS = os.getenv('GPODDER_PASS')
 
 # Pocket Casts API einrichten
-client = pocketcasts.Client(username=POCKETCASTS_USERNAME, password=POCKETCASTS_PASSWORD)
+pocket = PocketCast(POCKETCASTS_USERNAME, POCKETCASTS_PASSWORD)
+gpodder = api.MygPodderClient(GPODDER_USER,GPODDER_PASS, GPODDER_SERVER)
 
 # Episoden aus Pocket Casts abrufen
-episodes = client.get_all_episodes()
+podcasts = pocket.subscriptions
 
-# Episoden zu gPodder Server übertragen
-for episode in episodes:
-    data = {
-        'url': episode.url,
-        'title': episode.title,
-        'description': episode.description,
-    }
-    response = requests.post(f'{GPODDER_SERVER}/api/2/data/', json=data)
-    if response.status_code == 200:
-        logger.info(f"Erfolgreich übertragen: {episode.title}")
-    else:
-        logger.error(f"Fehler beim Übertragen der Episode: {episode.title}")
