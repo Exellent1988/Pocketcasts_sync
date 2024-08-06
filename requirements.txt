@@ -2,3 +2,4 @@ pycketcasts
 coloredlogs
 python-dotenv
 mygpoclient
+tqdm
