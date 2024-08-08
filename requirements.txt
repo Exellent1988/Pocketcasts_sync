@@ -1,4 +1,3 @@
-pycketcasts
 coloredlogs
 python-dotenv
 mygpoclient

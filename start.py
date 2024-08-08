@@ -1,4 +1,4 @@
-from pycketcasts.pocketcasts import PocketCast
+from library.pycketcasts.pocketcasts import PocketCast
 import os
 from dotenv import load_dotenv
 import coloredlogs, logging
@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 # Logger konfigurieren
 logger = logging.getLogger(__name__)
-coloredlogs.install(level='DEBUG', logger=logger)
+coloredlogs.install(level='INFO', logger=logger)
 
 # .env Datei laden
 load_dotenv()
@@ -66,26 +66,70 @@ except:
 
 # Episodenstatus zu gPodder übertragen
 
-logger.info(f"Starte Episoden Sync")
 
+# From PocketCasts:
+#             {
+#     "uuid": "038d8af5-a4f7-40fa-9aac-0d639f59caa3",
+#     "url": "https://freakshow.fm/podlove/file/3730/s/feed/c/m4a/fs132-denk-nicht-in-layern-denk-in-schichten.m4a",
+#     "published": "2014-05-15T09:04:36Z",
+#     "duration": 13991,
+#     "fileType": "audio/x-m4a",
+#     "title": "Denk nicht in Layern, denk in Schichten!",
+#     "size": "89447831",
+#     "playingStatus": 1,
+#     "playedUpTo": 0,
+#     "starred": false,
+#     "podcastUuid": "05f2f750-19a2-012e-ffaf-00163e1b201c",
+#     "podcastTitle": "Freak Show",
+#     "episodeType": "full",
+#     "episodeSeason": 2,
+#     "episodeNumber": 132,
+#     "isDeleted": true,
+#     "author": "Metaebene Personal Media - Tim Pritlove",
+#     "bookmarks": []
+# }
+# PlayingStatus 0: not played
+# PlayingStatus 1: reset to unheared
+# PlayingStatus 2: in progress
+# PlayingStatus 3: finished
+
+
+
+logger.info(f"Starte Postcast-Episoden Verarbeitung")
+now_str = f"{datetime.datetime.now().isoformat()}"
 for podcast in pc_subscriptions:
-    changes =[]
-    episodes = podcast.episodes
+    changes = []
+    try:
+        logger.info(f"Hole Episodeninfos zu Podcast: {podcast.title}")
+        episodes = podcast.episodes
+    except:
+        logger.error(f" Episodeninfos zu Podcast: {podcast.title} konnten nicht abgerufen werden")
+        continue
+
+    logger.info(f"Generiere Changes")
     with tqdm(total=len(episodes), desc=f"{podcast.title} Episodes") as pbar:
         for episode in episodes:
-            if episode.deleted:
-                action = api.EpisodeAction(podcast.feed, episode.url, "delete", gpodder_device.device_id)
+            if episode.playing_status >= 2:
+                try:
+                    episode = episode.details()
+                except:
+                    logger.error(f"Couldn't receive Episode Details:a{episode.uuid}")
+                    continue
+            if episode.playing_status == 2:
+                action = api.EpisodeAction(podcast.feed, episode.url, "play", gpodder_device.device_id,now_str,0,episode.current_position,episode.duration)
                 changes.append(action)
-                logger.info(f"{podcast.title}: season: {episode.season}.{episode.number} {episode.title} als gespielt markiert")
-            else:
-                action = api.EpisodeAction(podcast.feed, episode.url, "new", gpodder_device.device_id)
+                logger.debug(f"{podcast.title}: season: {episode.season}.{episode.number} {episode.title} als in Progressgespielt markiert")
+            elif episode.playing_status == 3:
+                action = api.EpisodeAction(podcast.feed, episode.url, "play", gpodder_device.device_id,now_str,0,episode.duration,episode.duration)
                 changes.append(action)
-                logger.info(f"{podcast.title}: season: {episode.season}.{episode.number} {episode.title} als neu markiert")
+                logger.debug(f"{podcast.title}: season: {episode.season}.{episode.number} {episode.title} als done markiert")
             pbar.update(1)
-    
+        # for change in changes:
+    #     logger.info(f"{pprint(change.to_dictionary())}")
     try:
-        syncresult = gp.upload_episode_actions(api.EpisodeActionChanges(changes, datetime.datetime.now().isoformat()))
-        logger.info(f"{syncresult}")
+        if len(changes) >0: 
+            syncresult = gp.upload_episode_actions(changes)
+            logger.info(f"Podcast {podcast.title} erfolgreich syncronisiert {syncresult}")
     except:
         logger.error(f"Podcast {podcast.title} konnte Episodenstatus nicht syncen")
 
